@@ -41,7 +41,7 @@ int readEhdr(FILE *fp){
 
     if (a==0)
 	{
-		cout<<"fail to read head"<<endl;
+		cout<<"读取文件头失败"<<endl;
 		return 0;
 	}
  
@@ -430,11 +430,15 @@ int readSymtab(FILE *fp){
 
 
 
+
 /*./myreadelf -h hello 查看头文件
 ./myreadelf -S hello    查看段表
 ./myreadelf -x.shs hello 查看段表字符串表
 ./myreadelf -x.s hello 查看字符串表
-./myreadelf -s hello 查看符号表*/
+./myreadelf -s hello 查看符号表
+./myreadelf - hello 全部执行
+
+*/
 int main(int argc,char*argv[])
 {
     char *filename;
@@ -450,6 +454,8 @@ int main(int argc,char*argv[])
         return 0;
 	}
     
+
+
     if(strcmp(opt,"-h")==0){
         readEhdr(fp);
         return 0;
@@ -465,9 +471,17 @@ int main(int argc,char*argv[])
     }else if(strcmp(opt,"-s")==0){
         readSymtab(fp);    
         return 0;   
-    }else{
+    }else if(strcmp(opt,"-")==0){
+        readEhdr(fp);
+        readShdr(fp);
+        readShstrtab(fp);
+        readStrtab(fp);
+        readSymtab(fp); 
+    }
+    else{
         cout<<"你输入的命令有错误！"<<endl;
     }
+    fclose(fp);
 
     return 0;
 }
