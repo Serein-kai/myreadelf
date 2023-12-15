@@ -68,6 +68,80 @@ int readShstrtab(FILE *fp,Elf64_Ehdr elf_head,Elf64_Shdr *elf_shdr,char *elf_shs
     return 0;
 }
 
+//读取段表字符串表下标为p开头内容，以为\0结尾的字符串。1、打印段表的时候段名用到。
+//2、在读取字符串表时，需要找字符串表段表名在段表中的下标时，逐一匹配段表名是否为“.strtab”。3、在读取符号表时，需要找到在段表中的下标
+char * readshname(char *elf_shstrtab,int p){
+    char *shname=(char*)malloc(sizeof(char)*1);
+    int i=0;
+
+    while(elf_shstrtab[p]!='\0'){
+        shname[i++]=elf_shstrtab[p++];
+        shname=(char*)realloc(shname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
+    }
+    shname=(char*)realloc(shname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
+    shname[i]='\0';
+    return shname;
+}
+
+//读取字符串表的内容到字符数组中
+int readStrtab(FILE *fp,Elf64_Ehdr elf_head,Elf64_Shdr *elf_shdr,char *elf_shstrtab,char **pelf_strtab,int &strndx)
+{
+    int a=0;
+    //找到字符串表的下标
+    for(int i=1;i<elf_head.e_shnum;i++){
+        if(strcmp(readshname(elf_shstrtab,elf_shdr[i].sh_name),".strtab")==0){
+            strndx=i;
+        }
+    }
+    //定位到字符串表
+    (*pelf_strtab)=(char*)malloc(sizeof(char)*elf_shdr[strndx].sh_size);
+    a=fseek(fp,elf_shdr[strndx].sh_offset,SEEK_SET);//这里应该是偏移量，而不是addr，addr是可以被加载之后
+    a=fread((*pelf_strtab),elf_shdr[strndx].sh_size,1,fp);
+    rewind(fp);
+    if (a==0){
+		cout<<"读取字符串表失败！"<<endl;
+		return 0;
+	}
+    return 0;
+}
+
+//读取字符串表下标为p开头内容，以为\0结尾的内容。1、在打印符号表时，符号表中符号名需要用到。
+char * readsymname(char *elf_strtab,int p){
+    char *symname=(char*)malloc(sizeof(char)*1);
+    int i=0;
+    while(elf_strtab[p]!='\0'){
+        symname[i++]=elf_strtab[p++];
+        symname=(char*)realloc(symname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
+    }
+    symname=(char*)realloc(symname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
+    symname[i]='\0';
+
+    return symname;
+}
+
+//读取符号表的内容
+int readSymtab(FILE *fp,Elf64_Ehdr elf_head,Elf64_Shdr *elf_shdr,char *elf_shstrtab,char *elf_strtab,Elf64_Sym **pelf_sym,int &symndx){
+    int a{};
+
+    //找到符号表在段表中的下标
+    for(int i=1;i<elf_head.e_shnum;i++){
+        if(strcmp(readshname(elf_shstrtab,elf_shdr[i].sh_name),".symtab")==0){
+            symndx=i;
+        }
+    }
+    (*pelf_sym)=(Elf64_Sym*)malloc(elf_shdr[symndx].sh_size);
+    a=fseek(fp,elf_shdr[symndx].sh_offset,SEEK_SET);
+    a=fread((*pelf_sym),elf_shdr[symndx].sh_size,1,fp);
+    rewind(fp);
+
+    if (a==0){
+		cout<<"读取符号表失败！"<<endl;
+		return 0;
+	}
+    return 0;
+}
+
+
 //1输出elf_header中入口地址，文件属性，段表在文件中的偏移，段表数量，段表每一项大小,段表字符串表在段表中的下标等信息。readelf -h hello >readelf-hhello.txt
 int printEhdr(Elf64_Ehdr elf_head){
 	// 判断ELF文件类型，是不是ELF文件
@@ -106,20 +180,6 @@ int printEhdr(Elf64_Ehdr elf_head){
     cout<<"| "<<"EIL文件头本身大小："<<elf_head.e_ehsize<<"(bytes)"<<endl;
     cout<<"|________________________________________________________"<<endl;
     return 0;
-}
-
-//读取段表字符串表下标为p开头内容，以为\0结尾
-char * readshname(char *elf_shstrtab,int p){
-    char *shname=(char*)malloc(sizeof(char)*1);
-    int i=0;
-
-    while(elf_shstrtab[p]!='\0'){
-        shname[i++]=elf_shstrtab[p++];
-        shname=(char*)realloc(shname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
-    }
-    shname=(char*)realloc(shname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
-    shname[i]='\0';
-    return shname;
 }
 
 //2 输出段表中每个段的名称，大小，偏移，段虚拟地址，段的类型等信息readelf -S hello >readelf-Shello.txt
@@ -188,28 +248,6 @@ int printShstrtab(Elf64_Ehdr elf_head,Elf64_Shdr *elf_shdr,char *elf_shstrtab){
     return 0;
 }
 
-//读取字符串表的内容到字符数组中
-int readStrtab(FILE *fp,Elf64_Ehdr elf_head,Elf64_Shdr *elf_shdr,char *elf_shstrtab,char **pelf_strtab,int &strndx)
-{
-    int a=0;
-    //找到字符串表的下标
-    for(int i=1;i<elf_head.e_shnum;i++){
-        if(strcmp(readshname(elf_shstrtab,elf_shdr[i].sh_name),".strtab")==0){
-            strndx=i;
-        }
-    }
-    //定位到字符串表
-    (*pelf_strtab)=(char*)malloc(sizeof(char)*elf_shdr[strndx].sh_size);
-    a=fseek(fp,elf_shdr[strndx].sh_offset,SEEK_SET);//这里应该是偏移量，而不是addr，addr是可以被加载之后
-    a=fread((*pelf_strtab),elf_shdr[strndx].sh_size,1,fp);
-    rewind(fp);
-    if (a==0){
-		cout<<"读取字符串表失败！"<<endl;
-		return 0;
-	}
-    return 0;
-}
-
 //4 输出字符串表中的内容readelf -x .strtab hello > readelf-x.strtab.txt
 int printStrtab(Elf64_Shdr *elf_shdr,char *elf_shstrtab,char *elf_strtab,int strndx){
     cout<<"________________________________________________________________________________________"<<endl;
@@ -229,46 +267,11 @@ int printStrtab(Elf64_Shdr *elf_shdr,char *elf_shstrtab,char *elf_strtab,int str
     return 0;
 }
 
-//读取字符串表下标为p开头内容，以为\0结尾的内容。这个是符号表中符号名需要用到的。
-char * readsymname(char *elf_strtab,int p){
-    char *symname=(char*)malloc(sizeof(char)*1);
-    int i=0;
-    while(elf_strtab[p]!='\0'){
-        symname[i++]=elf_strtab[p++];
-        symname=(char*)realloc(symname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
-    }
-    symname=(char*)realloc(symname,(i+1)*sizeof(char));//后面的是重新分配之后的所有的大小
-    symname[i]='\0';
-
-    return symname;
-}
-
-//读取符号表的内容
-int readSymtab(FILE *fp,Elf64_Ehdr elf_head,Elf64_Shdr *elf_shdr,char *elf_shstrtab,char *elf_strtab,Elf64_Sym **pelf_sym,int &symndx){
-    int a{};
-
-    //找到符号表在段表中的下标
-    for(int i=1;i<elf_head.e_shnum;i++){
-        if(strcmp(readshname(elf_shstrtab,elf_shdr[i].sh_name),".symtab")==0){
-            symndx=i;
-        }
-    }
-    (*pelf_sym)=(Elf64_Sym*)malloc(elf_shdr[symndx].sh_size);
-    a=fseek(fp,elf_shdr[symndx].sh_offset,SEEK_SET);
-    a=fread((*pelf_sym),elf_shdr[symndx].sh_size,1,fp);
-    rewind(fp);
-
-    if (a==0){
-		cout<<"读取符号表失败！"<<endl;
-		return 0;
-	}
-    return 0;
-}
-
 //5 输出符号表中的信息，符号名，符号大小，符号所在段，符号对应的值等信息readelf-s hello
 int printSymtab(Elf64_Shdr *elf_shdr,char *elf_strtab,Elf64_Sym *elf_sym,int symndx){
 
     int symnum=elf_shdr[symndx].sh_size/sizeof(Elf64_Sym);
+    cout<<dec;
     cout<<"____________________________________________________________________________________________________________________________"<<endl;
     cout<<"| "<<"符号表有："<<(symnum)<<"个符号"<<endl;
     cout<<"|___________________________________________________________________________________________________________________________"<<endl;
@@ -302,11 +305,10 @@ int printSymtab(Elf64_Shdr *elf_shdr,char *elf_strtab,Elf64_Sym *elf_sym,int sym
 
 /*./myreadelf -h hello 查看头文件
 ./myreadelf -S hello    查看段表
-./myreadelf -x.shs hello 查看段表字符串表
-./myreadelf -x.s hello 查看字符串表
+./myreadelf -xsh hello 查看段表字符串表
+./myreadelf -xs hello 查看字符串表
 ./myreadelf -s hello 查看符号表
-./myreadelf - hello 全部执行有问题？？
-
+./myreadelf -a hello 全部执行有问题
 */
 int main(int argc,char*argv[])
 {
@@ -350,16 +352,16 @@ int main(int argc,char*argv[])
     }else if(strcmp(opt,"-S")==0){
         printShdr(elf_head,elf_shdr,elf_shstrtab);
         return 0;
-    }else if(strcmp(opt,"-x.shs")==0){
+    }else if(strcmp(opt,"-xsh")==0){
         printShstrtab(elf_head,elf_shdr,elf_shstrtab);
         return 0;
-    }else if(strcmp(opt,"-x.s")==0){
+    }else if(strcmp(opt,"-xs")==0){
         printStrtab(elf_shdr,elf_shstrtab,elf_strtab,strndx);
         return 0;
     }else if(strcmp(opt,"-s")==0){
         printSymtab(elf_shdr,elf_strtab,elf_sym,symndx);
         return 0;   
-    }else if(strcmp(opt,"-")==0){
+    }else if(strcmp(opt,"-a")==0){
         printEhdr(elf_head);
         printShdr(elf_head,elf_shdr,elf_shstrtab);
         printShstrtab(elf_head,elf_shdr,elf_shstrtab);
